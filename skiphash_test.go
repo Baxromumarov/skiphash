@@ -9,8 +9,100 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestSkipHashRangeAll(t *testing.T) {
+
+	t.Run("default order", func(t *testing.T) {
+		sh := New[int, int]()
+		sh.Insert(1, 1)
+		sh.Insert(2, 2)
+		sh.Insert(3, 3)
+
+		entries := sh.RangeAll()
+		assert.Len(t, entries, 3, "expected 3 entries")
+		assert.Equal(t, 1, entries[0].Key, "unexpected key for first entry")
+		assert.Equal(t, 1, entries[0].Value, "unexpected value for first entry")
+		assert.Equal(t, 2, entries[1].Key, "unexpected key for second entry")
+		assert.Equal(t, 2, entries[1].Value, "unexpected value for second entry")
+		assert.Equal(t, 3, entries[2].Key, "unexpected key for third entry")
+		assert.Equal(t, 3, entries[2].Value, "unexpected value for third entry")
+	})
+
+	t.Run("unordered input", func(t *testing.T) {
+		sh := New[int, int]()
+		sh.Insert(3, 3)
+		sh.Insert(1, 1)
+		sh.Insert(2, 2)
+
+		entries := sh.RangeAll()
+		assert.Len(t, entries, 3, "expected 3 entries")
+		assert.Equal(t, 1, entries[0].Key, "unexpected key for first entry")
+		assert.Equal(t, 1, entries[0].Value, "unexpected value for first entry")
+		assert.Equal(t, 2, entries[1].Key, "unexpected key for second entry")
+		assert.Equal(t, 2, entries[1].Value, "unexpected value for second entry")
+		assert.Equal(t, 3, entries[2].Key, "unexpected key for third entry")
+		assert.Equal(t, 3, entries[2].Value, "unexpected value for third entry")
+	})
+
+	t.Run("remove entry", func(t *testing.T) {
+
+		sh := New[int, int]()
+		sh.Insert(1, 1)
+		sh.Insert(2, 2)
+		sh.Insert(3, 3)
+		sh.Remove(2)
+		entries := sh.RangeAll()
+		assert.Len(t, entries, 2, "expected 2 entries")
+		assert.Equal(t, 1, entries[0].Key, "unexpected key for first entry")
+		assert.Equal(t, 1, entries[0].Value, "unexpected value for first entry")
+		assert.Equal(t, 3, entries[1].Key, "unexpected key for second entry")
+		assert.Equal(t, 3, entries[1].Value, "unexpected value for second entry")
+	})
+	t.Run("remove all entry", func(t *testing.T) {
+
+		sh := New[int, int]()
+		sh.Insert(1, 1)
+		sh.Insert(2, 2)
+		sh.Insert(3, 3)
+		sh.Remove(2)
+		sh.Remove(1)
+		sh.Remove(3)
+		entries := sh.RangeAll()
+		assert.Len(t, entries, 0, "expected 0 entries")
+	})
+	t.Run("reinsert entry", func(t *testing.T) {
+
+		sh := New[int, int]()
+		sh.Insert(1, 1)
+		sh.Insert(2, 2)
+		sh.Insert(3, 3)
+		sh.Remove(2)
+		sh.Insert(2, 22)
+		entries := sh.RangeAll()
+		assert.Len(t, entries, 3, "expected 3 entries")
+		assert.Equal(t, 1, entries[0].Key, "unexpected key for first entry")
+		assert.Equal(t, 1, entries[0].Value, "unexpected value for first entry")
+		assert.Equal(t, 2, entries[1].Key, "unexpected key for second entry")
+		assert.Equal(t, 22, entries[1].Value, "unexpected value for second entry")
+		assert.Equal(t, 3, entries[2].Key, "unexpected key for third entry")
+		assert.Equal(t, 3, entries[2].Value, "unexpected value for third entry")
+	})
+
+}
+func TestSkipHashInsertSameKey(t *testing.T) {
+	sh := New[int, int]()
+	sh.Insert(1, -12)
+	got, ok := sh.Get(1)
+
+	assert.True(t, ok, "expected get to succeed")
+	assert.Equal(t, -12, got, "unexpected value for key=1")
+
+	// insert the same keyy with different value, it must fail because the key is still live
+
+	assert.False(t, sh.Insert(1, -13), "expected insert to fail for live key")
+
+}
 func TestSkipHashInsertGetRemove(t *testing.T) {
-	sh := NewSkipHash[int, string](WithRandSource(rand.NewSource(1)))
+	sh := New[int, string](WithRandSource(rand.NewSource(1)))
 
 	assert.True(t, sh.Insert(10, "a"), "expected first insert to succeed")
 	assert.False(t, sh.Insert(10, "b"), "expected duplicate insert to fail")
@@ -27,7 +119,7 @@ func TestSkipHashInsertGetRemove(t *testing.T) {
 }
 
 func TestSkipHashReinsertAfterLogicalDelete(t *testing.T) {
-	sh := NewSkipHash[int, string](WithRandSource(rand.NewSource(2)))
+	sh := New[int, string](WithRandSource(rand.NewSource(2)))
 
 	assert.True(t, sh.Insert(7, "old"), "insert old failed")
 	assert.True(t, sh.Remove(7), "remove old failed")
@@ -43,7 +135,7 @@ func TestSkipHashReinsertAfterLogicalDelete(t *testing.T) {
 }
 
 func TestSkipHashRangeAndPointQueries(t *testing.T) {
-	sh := NewSkipHash[int, int](WithRandSource(rand.NewSource(3)))
+	sh := New[int, int](WithRandSource(rand.NewSource(3)))
 	for _, k := range []int{5, 1, 3, 2, 4, 8, 6} {
 		assert.True(t, sh.Insert(k, k*10), "insert failed for key=%d", k)
 	}
@@ -75,7 +167,7 @@ func TestSkipHashRangeAndPointQueries(t *testing.T) {
 }
 
 func TestSkipHashConcurrentSanity(t *testing.T) {
-	sh := NewSkipHash[int, int](WithRandSource(rand.NewSource(4)))
+	sh := New[int, int](WithRandSource(rand.NewSource(4)))
 	const (
 		workers  = 8
 		opsPerG  = 5000
@@ -110,7 +202,7 @@ func TestSkipHashConcurrentSanity(t *testing.T) {
 }
 
 func TestSkipHashRangeCount(t *testing.T) {
-	sh := NewSkipHash[int, int](WithRandSource(rand.NewSource(time.Now().UnixNano())))
+	sh := New[int, int](WithRandSource(rand.NewSource(time.Now().UnixNano())))
 	for i := range 100 {
 		sh.Store(i, i)
 	}

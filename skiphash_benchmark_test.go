@@ -31,7 +31,7 @@ type adapter struct {
 
 func newAdapter() benchMap {
 	return &adapter{
-		sh: NewSkipHash[int, int](WithRandSource(rand.NewSource(1))),
+		sh: New[int, int](WithRandSource(rand.NewSource(1))),
 	}
 }
 

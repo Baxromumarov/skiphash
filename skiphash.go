@@ -81,7 +81,7 @@ type slNode[K cmp.Ordered, V any] struct {
 	unstitched bool
 }
 
-func NewSkipHash[K cmp.Ordered, V any](opts ...Option) *SkipHash[K, V] {
+func New[K cmp.Ordered, V any](opts ...Option) *SkipHash[K, V] {
 	cfg := config{
 		maxLevel:      DefaultMaxLevel,
 		fastPathTries: DefaultFastPathTries,
@@ -152,7 +152,7 @@ func (sh *SkipHash[K, V]) Contains(key K) bool {
 	return ok
 }
 
-// Insert adds a new key/value pair and fails if a live key already exists.
+// Insert adds a new key/value pair and fails if a key already exists.
 func (sh *SkipHash[K, V]) Insert(key K, value V) bool {
 	sh.mu.Lock()
 	defer sh.mu.Unlock()
@@ -328,6 +328,21 @@ func (sh *SkipHash[K, V]) predecessorLocked(key K, strict bool) *slNode[K, V] {
 		cur = cur.prev[0]
 	}
 	return cur
+}
+
+// RangeAll returns all logically present entries.
+func (sh *SkipHash[K, V]) RangeAll() []Entry[K, V] {
+	out := make([]Entry[K, V], 0, sh.Len())
+	for node := sh.head.next[0]; node != sh.tail; node = node.next[0] {
+		if node.rTime == 0 {
+			out = append(out, Entry[K, V]{
+				Key:   node.key,
+				Value: node.value,
+			})
+		}
+	}
+	return out
+
 }
 
 // RangeCount returns how many logically present keys are in [low, high].
