@@ -25,29 +25,29 @@ type benchMap interface {
 	RangeCount(int, int) int
 }
 
-type skipHashAdapter struct {
+type adapter struct {
 	sh *SkipHash[int, int]
 }
 
-func newSkipHashAdapter() benchMap {
-	return &skipHashAdapter{
+func newAdapter() benchMap {
+	return &adapter{
 		sh: NewSkipHash[int, int](WithRandSource(rand.NewSource(1))),
 	}
 }
 
-func (a *skipHashAdapter) Load(k int) (int, bool) {
+func (a *adapter) Load(k int) (int, bool) {
 	return a.sh.Get(k)
 }
 
-func (a *skipHashAdapter) Store(k, v int) {
+func (a *adapter) Store(k, v int) {
 	a.sh.Store(k, v)
 }
 
-func (a *skipHashAdapter) Delete(k int) {
+func (a *adapter) Delete(k int) {
 	a.sh.Remove(k)
 }
 
-func (a *skipHashAdapter) RangeCount(low, high int) int {
+func (a *adapter) RangeCount(low, high int) int {
 	return a.sh.RangeCount(low, high)
 }
 
@@ -131,7 +131,7 @@ var benchmarkImplementations = []struct {
 	name string
 	new  func() benchMap
 }{
-	{name: "skiphash", new: newSkipHashAdapter},
+	{name: "skiphash", new: newAdapter},
 	{name: "map+rwmutex", new: newLockedMapAdapter},
 	{name: "sync.Map", new: newSyncMapAdapter},
 }
@@ -182,10 +182,7 @@ func runWorkloadOnAllMaps(b *testing.B, cfg workloadConfig) {
 func runWorkloadParallel(b *testing.B, m benchMap, cfg workloadConfig) {
 	b.ReportAllocs()
 	var seedCounter atomic.Uint64
-	span := cfg.universe - cfg.rangeLength
-	if span < 1 {
-		span = 1
-	}
+	span := max(cfg.universe-cfg.rangeLength, 1)
 
 	b.ResetTimer()
 	b.RunParallel(func(pb *testing.PB) {
@@ -220,16 +217,57 @@ func runWorkloadParallel(b *testing.B, m benchMap, cfg workloadConfig) {
 
 func BenchmarkPaperFigure5Workloads(b *testing.B) {
 	workloads := []workloadConfig{
-		{name: "fig5a_100_lookup", universe: paperUniverse, rangeLength: paperRangeLength, lookupPct: 100, updatePct: 0, rangePct: 0},
-		{name: "fig5b_100_update", universe: paperUniverse, rangeLength: paperRangeLength, lookupPct: 0, updatePct: 100, rangePct: 0},
-		{name: "fig5c_100_range", universe: paperUniverse, rangeLength: paperRangeLength, lookupPct: 0, updatePct: 0, rangePct: 100},
-		{name: "fig5d_80_lookup_10_update_10_range", universe: paperUniverse, rangeLength: paperRangeLength, lookupPct: 80, updatePct: 10, rangePct: 10},
-		{name: "fig5e_80_update_20_range", universe: paperUniverse, rangeLength: paperRangeLength, lookupPct: 0, updatePct: 80, rangePct: 20},
-		{name: "fig5f_1_lookup_98_update_1_range", universe: paperUniverse, rangeLength: paperRangeLength, lookupPct: 1, updatePct: 98, rangePct: 1},
+		{
+			name:        "fig5a_100_lookup",
+			universe:    paperUniverse,
+			rangeLength: paperRangeLength,
+			lookupPct:   100,
+			updatePct:   0,
+			rangePct:    0,
+		},
+		{
+			name:        "fig5b_100_update",
+			universe:    paperUniverse,
+			rangeLength: paperRangeLength,
+			lookupPct:   0,
+			updatePct:   100,
+			rangePct:    0,
+		},
+		{
+			name:        "fig5c_100_range",
+			universe:    paperUniverse,
+			rangeLength: paperRangeLength,
+			lookupPct:   0,
+			updatePct:   0,
+			rangePct:    100,
+		},
+		{
+			name:        "fig5d_80_lookup_10_update_10_range",
+			universe:    paperUniverse,
+			rangeLength: paperRangeLength,
+			lookupPct:   80,
+			updatePct:   10,
+			rangePct:    10,
+		},
+		{
+			name:        "fig5e_80_update_20_range",
+			universe:    paperUniverse,
+			rangeLength: paperRangeLength,
+			lookupPct:   0,
+			updatePct:   80,
+			rangePct:    20,
+		},
+		{
+			name:        "fig5f_1_lookup_98_update_1_range",
+			universe:    paperUniverse,
+			rangeLength: paperRangeLength,
+			lookupPct:   1,
+			updatePct:   98,
+			rangePct:    1,
+		},
 	}
 
 	for _, cfg := range workloads {
-		cfg := cfg
 		b.Run(cfg.name, func(b *testing.B) {
 			runWorkloadOnAllMaps(b, cfg)
 		})

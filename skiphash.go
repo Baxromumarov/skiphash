@@ -67,7 +67,7 @@ type SkipHash[K cmp.Ordered, V any] struct {
 type slNode[K cmp.Ordered, V any] struct {
 	key    K
 	value  V
-	height int
+	height uint8
 
 	prev []*slNode[K, V]
 	next []*slNode[K, V]
@@ -102,9 +102,9 @@ func NewSkipHash[K cmp.Ordered, V any](opts ...Option) *SkipHash[K, V] {
 		cfg.randSource = rand.NewSource(time.Now().UnixNano())
 	}
 
-	head := newSentinel[K, V](cfg.maxLevel)
-	tail := newSentinel[K, V](cfg.maxLevel)
-	for level := 0; level < cfg.maxLevel; level++ {
+	head := newSentinel[K, V](uint8(cfg.maxLevel))
+	tail := newSentinel[K, V](uint8(cfg.maxLevel))
+	for level := uint8(0); level < uint8(cfg.maxLevel); level++ {
 		head.next[level] = tail
 		tail.prev[level] = head
 	}
@@ -120,7 +120,7 @@ func NewSkipHash[K cmp.Ordered, V any](opts ...Option) *SkipHash[K, V] {
 	}
 }
 
-func newSentinel[K cmp.Ordered, V any](height int) *slNode[K, V] {
+func newSentinel[K cmp.Ordered, V any](height uint8) *slNode[K, V] {
 	return &slNode[K, V]{
 		height: height,
 		prev:   make([]*slNode[K, V], height),
@@ -196,7 +196,7 @@ func (sh *SkipHash[K, V]) insertNodeLocked(key K, value V) *slNode[K, V] {
 		iTime:  sh.rqc.onUpdateLocked(),
 	}
 
-	for i := 0; i < level; i++ {
+	for i := uint8(0); i < level; i++ {
 		pred := preds[i]
 		succ := succs[i]
 		node.prev[i] = pred
@@ -229,7 +229,10 @@ func (sh *SkipHash[K, V]) Ceil(key K) (Entry[K, V], bool) {
 	defer sh.mu.RUnlock()
 
 	if node, exists := sh.index[key]; exists {
-		return Entry[K, V]{Key: node.key, Value: node.value}, true
+		return Entry[K, V]{
+			Key:   node.key,
+			Value: node.value,
+		}, true
 	}
 
 	node := sh.firstLiveGELocked(key)
@@ -237,7 +240,10 @@ func (sh *SkipHash[K, V]) Ceil(key K) (Entry[K, V], bool) {
 		var zero Entry[K, V]
 		return zero, false
 	}
-	return Entry[K, V]{Key: node.key, Value: node.value}, true
+	return Entry[K, V]{
+		Key:   node.key,
+		Value: node.value,
+	}, true
 }
 
 func (sh *SkipHash[K, V]) Succ(key K) (Entry[K, V], bool) {
@@ -250,14 +256,19 @@ func (sh *SkipHash[K, V]) Succ(key K) (Entry[K, V], bool) {
 	} else {
 		node = sh.lowerBoundLocked(key)
 	}
-	for node != sh.tail && (node.key == key || node.rTime != 0) {
+	for node != sh.tail &&
+		(node.key == key || node.rTime != 0) {
 		node = node.next[0]
 	}
+
 	if node == sh.tail {
 		var zero Entry[K, V]
 		return zero, false
 	}
-	return Entry[K, V]{Key: node.key, Value: node.value}, true
+	return Entry[K, V]{
+		Key:   node.key,
+		Value: node.value,
+	}, true
 }
 
 func (sh *SkipHash[K, V]) Floor(key K) (Entry[K, V], bool) {
@@ -265,7 +276,10 @@ func (sh *SkipHash[K, V]) Floor(key K) (Entry[K, V], bool) {
 	defer sh.mu.RUnlock()
 
 	if node, exists := sh.index[key]; exists {
-		return Entry[K, V]{Key: node.key, Value: node.value}, true
+		return Entry[K, V]{
+			Key:   node.key,
+			Value: node.value,
+		}, true
 	}
 
 	node := sh.predecessorLocked(key, false)
@@ -273,7 +287,10 @@ func (sh *SkipHash[K, V]) Floor(key K) (Entry[K, V], bool) {
 		var zero Entry[K, V]
 		return zero, false
 	}
-	return Entry[K, V]{Key: node.key, Value: node.value}, true
+	return Entry[K, V]{
+		Key:   node.key,
+		Value: node.value,
+	}, true
 }
 
 func (sh *SkipHash[K, V]) Pred(key K) (Entry[K, V], bool) {
@@ -285,7 +302,10 @@ func (sh *SkipHash[K, V]) Pred(key K) (Entry[K, V], bool) {
 		var zero Entry[K, V]
 		return zero, false
 	}
-	return Entry[K, V]{Key: node.key, Value: node.value}, true
+	return Entry[K, V]{
+		Key:   node.key,
+		Value: node.value,
+	}, true
 }
 
 func (sh *SkipHash[K, V]) predecessorLocked(key K, strict bool) *slNode[K, V] {
@@ -377,19 +397,22 @@ func (sh *SkipHash[K, V]) findInsertNeighborsLocked(key K) ([]*slNode[K, V], []*
 	return preds, succs
 }
 
-func (sh *SkipHash[K, V]) randomLevelLocked() int {
+func (sh *SkipHash[K, V]) randomLevelLocked() uint8 {
 	level := 1
 	for level < sh.maxLevel && sh.rng.Float64() < 0.5 {
 		level++
 	}
-	return level
+	return uint8(level)
 }
 
 func (sh *SkipHash[K, V]) unstitchNodeLocked(node *slNode[K, V]) {
-	if node == nil || node == sh.head || node == sh.tail || node.unstitched {
+	if node == nil ||
+		node == sh.head ||
+		node == sh.tail ||
+		node.unstitched {
 		return
 	}
-	for level := 0; level < node.height; level++ {
+	for level := uint8(0); level < node.height; level++ {
 		pred := node.prev[level]
 		succ := node.next[level]
 		if pred != nil {

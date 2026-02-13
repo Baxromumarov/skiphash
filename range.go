@@ -4,6 +4,8 @@ import (
 	"runtime"
 )
 
+const defaultEntryCap = 16
+
 func (sh *SkipHash[K, V]) Range(low, high K) []Entry[K, V] {
 	if low > high {
 		return nil
@@ -20,15 +22,20 @@ func (sh *SkipHash[K, V]) rangeFast(low, high K) ([]Entry[K, V], bool) {
 			runtime.Gosched()
 			continue
 		}
-		entries := make([]Entry[K, V], 0, 16)
+
+		entries := make([]Entry[K, V], 0, defaultEntryCap)
+
 		for node := sh.lowerBoundLocked(low); node != sh.tail && node.key <= high; node = node.next[0] {
 			if node.rTime == 0 {
 				entries = append(entries, Entry[K, V]{Key: node.key, Value: node.value})
 			}
 		}
+
 		sh.mu.RUnlock()
+
 		return entries, true
 	}
+
 	return nil, false
 }
 
@@ -43,7 +50,7 @@ func (sh *SkipHash[K, V]) rangeSlow(low, high K) []Entry[K, V] {
 	ver = sh.rqc.onRangeLocked()
 	sh.mu.Unlock()
 
-	entries := make([]Entry[K, V], 0, 16)
+	entries := make([]Entry[K, V], 0, defaultEntryCap)
 	node := start
 	for {
 		sh.mu.RLock()
